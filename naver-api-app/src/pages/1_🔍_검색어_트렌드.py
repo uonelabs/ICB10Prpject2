@@ -1,3 +1,8 @@
+"""네이버 데이터랩 API를 이용하여 다중 검색어의 기간별 상대 검색량 트렌드를 비교 분석하는 화면.
+
+작성자: Antigravity
+최종 수정일: 2026-07-04
+"""
 from datetime import date, timedelta
 
 import pandas as pd
@@ -84,7 +89,60 @@ if st.button("조회", type="primary"):
         st.info("조회된 데이터가 없습니다.")
         st.stop()
 
-    fig = px.line(df, x="날짜", y="검색비율", color="검색어", markers=True, title="검색어별 상대 검색량 추이")
+    # 프리미엄 HSL 계열 색상 팔레트 정의 (다양한 검색어에 조화롭고 세련된 느낌 전달)
+    colors = ["#1F77B4", "#FF7F0E", "#2CA02C", "#D62728", "#9467BD"]
+
+    fig = px.line(
+        df,
+        x="날짜",
+        y="검색비율",
+        color="검색어",
+        title="검색어별 상대 검색량 추이",
+        color_discrete_sequence=colors,
+    )
+
+    # 개별 라인 및 마커 상세 디자인 설정
+    fig.update_traces(
+        line=dict(width=3, shape="spline"),  # 곡선 스플라인 형태로 부드러운 전개
+        marker=dict(size=7, symbol="circle", line=dict(width=1.5, color="white")),  # 테두리가 있는 마커
+        hovertemplate="<b>%{data.name}</b><br>날짜: %{x}<br>검색비율: %{y:.1f}%<extra></extra>"
+    )
+
+    # 레이아웃 고도화 설정
+    fig.update_layout(
+        hovermode="x unified",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Pretendard, Inter, sans-serif"),
+        title=dict(
+            text="📈 검색어별 상대 검색량 추이",
+            font=dict(size=18, weight="bold"),
+            x=0.0,
+            y=0.95
+        ),
+        xaxis=dict(
+            showgrid=True,
+            gridcolor="rgba(128, 128, 128, 0.15)",
+            gridwidth=1,
+            linecolor="rgba(128, 128, 128, 0.3)"
+        ),
+        yaxis=dict(
+            showgrid=True,
+            gridcolor="rgba(128, 128, 128, 0.15)",
+            gridwidth=1,
+            linecolor="rgba(128, 128, 128, 0.3)",
+            ticksuffix="%"
+        ),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        ),
+        margin=dict(l=20, r=20, t=80, b=20)
+    )
+
     st.plotly_chart(fig, use_container_width=True)
 
     st.subheader("요약 통계")

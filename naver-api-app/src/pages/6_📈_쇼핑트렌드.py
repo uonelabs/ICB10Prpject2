@@ -1,3 +1,8 @@
+"""네이버 데이터랩 쇼핑인사이트 및 검색어 트렌드와 쇼핑 검색 스냅샷 데이터를 결합한 쇼핑 트렌드 분석 화면.
+
+작성자: Antigravity
+최종 수정일: 2026-07-04
+"""
 from datetime import date, timedelta
 
 import pandas as pd
@@ -123,7 +128,29 @@ if st.button("조회", type="primary"):
     if df_trend.empty:
         st.info("조회된 트렌드 데이터가 없습니다.")
     else:
-        fig = px.line(df_trend, x="날짜", y="검색비율", color=label_col, markers=True)
+        colors = ["#1F77B4", "#FF7F0E", "#2CA02C", "#D62728", "#9467BD"]
+        fig = px.line(
+            df_trend,
+            x="날짜",
+            y="검색비율",
+            color=label_col,
+            color_discrete_sequence=colors,
+        )
+        fig.update_traces(
+            line=dict(width=3, shape="spline"),
+            marker=dict(size=7, symbol="circle", line=dict(width=1.5, color="white")),
+            hovertemplate="<b>%{data.name}</b><br>날짜: %{x}<br>검색비율: %{y:.1f}%<extra></extra>"
+        )
+        fig.update_layout(
+            hovermode="x unified",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(family="Pretendard, Inter, sans-serif"),
+            xaxis=dict(showgrid=True, gridcolor="rgba(128, 128, 128, 0.15)", gridwidth=1),
+            yaxis=dict(showgrid=True, gridcolor="rgba(128, 128, 128, 0.15)", gridwidth=1, ticksuffix="%"),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            margin=dict(l=20, r=20, t=40, b=20)
+        )
         st.plotly_chart(fig, use_container_width=True)
 
     st.divider()
@@ -154,14 +181,50 @@ if st.button("조회", type="primary"):
         st.info("쇼핑 검색 결과가 없습니다.")
         st.stop()
 
+    # 바 차트 고급화
+    colors = ["#1F77B4", "#FF7F0E", "#2CA02C", "#D62728", "#9467BD"]
     col_a, col_b = st.columns(2)
     with col_a:
         avg_price = df_snap.groupby(label_col)["최저가"].mean().round(0).reset_index()
-        fig_price = px.bar(avg_price, x=label_col, y="최저가", color=label_col, text="최저가", title=f"{label_col}별 평균 최저가")
+        fig_price = px.bar(
+            avg_price,
+            x=label_col,
+            y="최저가",
+            color=label_col,
+            text_auto=".0f",
+            title=f"📊 {label_col}별 평균 최저가 (원)",
+            color_discrete_sequence=colors
+        )
+        fig_price.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(family="Pretendard, Inter, sans-serif"),
+            xaxis=dict(linecolor="rgba(128, 128, 128, 0.3)"),
+            yaxis=dict(showgrid=True, gridcolor="rgba(128, 128, 128, 0.15)", gridwidth=1),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        )
+        fig_price.update_traces(textposition="outside")
         st.plotly_chart(fig_price, use_container_width=True)
+
     with col_b:
         cat_counts = df_snap.groupby([label_col, "카테고리"]).size().reset_index(name="상품수")
-        fig_cat = px.bar(cat_counts, x="카테고리", y="상품수", color=label_col, barmode="group", title=f"{label_col}별 카테고리 분포")
+        fig_cat = px.bar(
+            cat_counts,
+            x="카테고리",
+            y="상품수",
+            color=label_col,
+            barmode="group",
+            title=f"📊 {label_col}별 카테고리 분포 (상품수)",
+            color_discrete_sequence=colors
+        )
+        fig_cat.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(family="Pretendard, Inter, sans-serif"),
+            xaxis=dict(linecolor="rgba(128, 128, 128, 0.3)"),
+            yaxis=dict(showgrid=True, gridcolor="rgba(128, 128, 128, 0.15)", gridwidth=1),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        )
         st.plotly_chart(fig_cat, use_container_width=True)
 
     st.subheader("상품 스냅샷 테이블")
