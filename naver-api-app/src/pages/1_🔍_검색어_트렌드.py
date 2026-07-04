@@ -9,7 +9,14 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from common import parse_keywords, render_sidebar, require_credentials
+from common import (
+    parse_keywords,
+    render_sidebar,
+    require_credentials,
+    load_search_history,
+    save_search_history,
+    check_api_quota_warning,
+)
 from naver_api import NaverAPIError, datalab_search_trend
 
 st.set_page_config(page_title="검색어 트렌드", page_icon="🔍", layout="wide")
@@ -20,10 +27,25 @@ st.caption("데이터랩 API로 여러 검색어의 기간별 상대 검색량(0
 
 require_credentials(client_id, client_secret)
 
+# 1단계: 필수 입력 및 최근 기록 로드
+st.subheader("1단계: 검색어 및 분석 단위 설정")
+history = load_search_history("search_trend")
+selected_history = None
+if history:
+    selected_history = st.selectbox(
+        "🕒 최근 분석한 검색어 불러오기",
+        options=["선택 안 함"] + history,
+        index=0
+    )
+
+default_keywords = ""
+if selected_history and selected_history != "선택 안 함":
+    default_keywords = selected_history
+
 col1, col2 = st.columns([2, 1])
 with col1:
     keywords_raw = st.text_input(
-        "검색어 (쉼표로 구분, 최대 5개)", placeholder="아이폰, 갤럭시, 삼성"
+        "검색어 (쉼표로 구분, 최대 5개)", value=default_keywords, placeholder="아이폰, 갤럭시, 삼성"
     )
 with col2:
     time_unit = st.selectbox("구간 단위", ["date", "week", "month"], format_func=lambda x: {"date": "일간", "week": "주간", "month": "월간"}[x])
@@ -36,7 +58,7 @@ start_date, end_date = st.date_input(
     min_value=date(2016, 1, 1),
     max_value=default_end,
 )
-
+st.subheader("2단계: 분석 조건 및 필터 설정")
 with st.expander("세부 조건 (선택)"):
     c1, c2, c3 = st.columns(3)
     device = c1.selectbox("기기", ["전체", "PC", "모바일"])
@@ -76,7 +98,13 @@ if st.button("조회", type="primary"):
                 ages=ages or None,
             )
     except NaverAPIError as e:
-        st.error(f"API 호출 실패: {e}")
+        error_msg = str(e)
+        if "[429]" in error_msg:
+            check_api_quota_warning(429)
+        elif "[500]" in error_msg:
+            check_api_quota_warning(500)
+        else:
+            st.error(f"API 호출 실패: {e}")
         st.stop()
 
     rows = []
@@ -84,6 +112,9 @@ if st.button("조회", type="primary"):
         for point in group.get("data", []):
             rows.append({"검색어": group["title"], "날짜": point["period"], "검색비율": point["ratio"]})
     df = pd.DataFrame(rows)
+
+    # 성공적으로 조회 시 검색어 히스토리에 기록
+    save_search_history("search_trend", keywords_raw)
 
     if df.empty:
         st.info("조회된 데이터가 없습니다.")

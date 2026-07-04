@@ -1,9 +1,15 @@
-"""페이지 공통 유틸리티: 사이드바 API 키 입력, 검색어 파싱, HTML 클린징 등."""
+"""페이지 공통 유틸리티: 사이드바 API 키 입력, 검색어 파싱, HTML 클린징 등.
+
+수정 내역:
+- 최근 검색 히스토리 로드/저장 기능 추가 (history.json 캐시 활용)
+- 네이버 API 호출 상태 코드 경고 유틸 추가
+"""
 from __future__ import annotations
 
 import os
 import re
 import html as html_lib
+import json
 from pathlib import Path
 
 import streamlit as st
@@ -80,3 +86,61 @@ def parse_keywords(raw: str, max_count: int | None = None) -> list[str]:
         st.warning(f"검색어는 최대 {max_count}개까지 지원합니다. 앞의 {max_count}개만 사용합니다.")
         unique = unique[:max_count]
     return unique
+
+
+HISTORY_FILE_PATH = Path(__file__).resolve().parent.parent / "data" / "history.json"
+
+
+def save_search_history(page_name: str, query: str) -> None:
+    """최근 검색어 내역을 로컬 JSON 파일에 기록합니다 (최대 5개 유지)."""
+    if not query:
+        return
+
+    # 디렉토리 생성 보장
+    HISTORY_FILE_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+    data = {}
+    if HISTORY_FILE_PATH.exists():
+        try:
+            with open(HISTORY_FILE_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            data = {}
+
+    history = data.setdefault(page_name, [])
+
+    # 중복 제거 후 가장 앞으로 배치
+    if query in history:
+        history.remove(query)
+    history.insert(0, query)
+
+    # 최대 5개 이력만 유지
+    data[page_name] = history[:5]
+
+    try:
+        with open(HISTORY_FILE_PATH, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
+    except IOError:
+        pass
+
+
+def load_search_history(page_name: str) -> list[str]:
+    """해당 페이지의 최근 검색어 내역을 가져옵니다."""
+    if not HISTORY_FILE_PATH.exists():
+        return []
+    try:
+        with open(HISTORY_FILE_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data.get(page_name, [])
+    except (json.JSONDecodeError, IOError):
+        return []
+
+
+def check_api_quota_warning(response_status: int) -> None:
+    """네이버 API 호출 결과 중 제한 상태 코드를 감지하고 경고를 출력합니다."""
+    if response_status == 429:
+        st.error("🚨 [API 호출 한도 초과] 오늘 허용된 네이버 API 호출량을 모두 소모했습니다. 내일 다시 이용해 주시거나 다른 Client ID로 변경해 주세요.")
+        st.stop()
+    elif response_status == 500:
+        st.error("🚨 [네이버 서버 오류] 네이버 API 서버 내부에서 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.")
+        st.stop()

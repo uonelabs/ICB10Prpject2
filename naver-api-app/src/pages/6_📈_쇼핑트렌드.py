@@ -9,7 +9,15 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from common import clean_text, parse_keywords, render_sidebar, require_credentials
+from common import (
+    clean_text,
+    parse_keywords,
+    render_sidebar,
+    require_credentials,
+    load_search_history,
+    save_search_history,
+    check_api_quota_warning,
+)
 from naver_api import (
     SHOPPING_CATEGORIES,
     NaverAPIError,
@@ -45,20 +53,53 @@ age_labels = {
     "9": "50~54세", "10": "55~59세", "11": "60세 이상",
 }
 
+# 1단계: 분석 대상 및 단위 설정
+st.subheader("1단계: 분석 대상 및 단위 설정")
+
 if analysis_mode == "검색어 직접 입력":
+    history = load_search_history("shopping_trend_keywords")
+    selected_history = None
+    if history:
+        selected_history = st.selectbox(
+            "🕒 최근 분석한 상품 검색어 불러오기",
+            options=["선택 안 함"] + history,
+            index=0
+        )
+
+    default_keywords = ""
+    if selected_history and selected_history != "선택 안 함":
+        default_keywords = selected_history
+
     col1, col2 = st.columns([2, 1])
     with col1:
-        keywords_raw = st.text_input("상품 검색어 (쉼표로 구분, 최대 5개)", placeholder="캠핑의자, 텀블러, 에어프라이어")
+        keywords_raw = st.text_input("상품 검색어 (쉼표로 구분, 최대 5개)", value=default_keywords, placeholder="캠핑의자, 텀블러, 에어프라이어")
     with col2:
         time_unit = st.selectbox("구간 단위", ["date", "week", "month"], format_func=lambda x: {"date": "일간", "week": "주간", "month": "월간"}[x], key="kw_unit")
 else:
+    history = load_search_history("shopping_trend_categories")
+    selected_history = None
+    if history:
+        selected_history = st.selectbox(
+            "🕒 최근 분석한 쇼핑 카테고리 불러오기",
+            options=["선택 안 함"] + history,
+            index=0
+        )
+
+    default_cats = []
+    if selected_history and selected_history != "선택 안 함":
+        default_cats = [c.strip() for c in selected_history.split(",")]
+        default_cats = [c for c in default_cats if c in SHOPPING_CATEGORIES]
+
     col1, col2 = st.columns([2, 1])
     with col1:
         selected_categories = st.multiselect(
-            "쇼핑 카테고리 (분야, 최대 3개)", options=list(SHOPPING_CATEGORIES.keys())
+            "쇼핑 카테고리 (분야, 최대 3개)", options=list(SHOPPING_CATEGORIES.keys()), default=default_cats
         )
     with col2:
         time_unit = st.selectbox("구간 단위", ["date", "week", "month"], format_func=lambda x: {"date": "일간", "week": "주간", "month": "월간"}[x], key="cat_unit")
+
+# 2단계: 분석 조건 및 필터 설정
+st.subheader("2단계: 분석 조건 및 필터 설정")
 
 start_date, end_date = st.date_input(
     "조회 기간", value=(default_start, default_end), min_value=date(2016, 1, 1), max_value=default_end
@@ -84,8 +125,17 @@ if st.button("조회", type="primary"):
                     keyword_groups, device=device_map[device], gender=gender_map[gender], ages=ages or None,
                 )
         except NaverAPIError as e:
-            st.error(f"데이터랩 API 호출 실패: {e}")
+            error_msg = str(e)
+            if "[429]" in error_msg:
+                check_api_quota_warning(429)
+            elif "[500]" in error_msg:
+                check_api_quota_warning(500)
+            else:
+                st.error(f"데이터랩 API 호출 실패: {e}")
             st.stop()
+
+        # 성공 시 검색어 이력 저장
+        save_search_history("shopping_trend_keywords", keywords_raw)
 
         label_col = "검색어"
         rows = []
@@ -112,8 +162,17 @@ if st.button("조회", type="primary"):
                     categories_param, device=device_map[device], gender=gender_map[gender], ages=ages or None,
                 )
         except NaverAPIError as e:
-            st.error(f"데이터랩 쇼핑인사이트 API 호출 실패: {e}")
+            error_msg = str(e)
+            if "[429]" in error_msg:
+                check_api_quota_warning(429)
+            elif "[500]" in error_msg:
+                check_api_quota_warning(500)
+            else:
+                st.error(f"데이터랩 쇼핑인사이트 API 호출 실패: {e}")
             st.stop()
+
+        # 성공 시 카테고리 이력 저장 (쉼표로 구분한 문자열로 기록)
+        save_search_history("shopping_trend_categories", ", ".join(selected_categories))
 
         label_col = "분야"
         rows = []
