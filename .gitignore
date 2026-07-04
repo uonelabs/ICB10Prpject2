@@ -109,3 +109,8 @@ Thumbs.db
 Pipfile.lock
 poetry.lock
 uv.lock
+
+# ===== 숨김 파일 및 폴더 =====
+.*
+!.gitignore
+
